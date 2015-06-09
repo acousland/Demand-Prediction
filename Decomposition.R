@@ -1,5 +1,6 @@
 ############################################
 # Demand Prediction Example
+# - Decomposition
 #
 # Aaron Cousland
 # 9/6/2015
@@ -22,8 +23,8 @@ local.connection <- odbcConnect("RTV", believeNRows=FALSE)
 
 # Query the database and put the results into the data frame logging.results
 energy.log <- sqlQuery(local.connection,"SELECT * from dw.METER_REG_ACTIVE_READ_48@CODSUP1.WORLD
-where METER_REG_ACTIVE_READING_DT between to_date('07/06/2015','DD/MM/YYYY') and to_date('01/12/2015','DD/MM/YYYY')
-AND NMI_ID = '6407580165';")
+                       where METER_REG_ACTIVE_READING_DT between to_date('01/01/2010','DD/MM/YYYY') and to_date('01/12/2015','DD/MM/YYYY')
+                       AND NMI_ID = '6407580165';")
 odbcCloseAll()
 
 # Transform results
@@ -38,54 +39,16 @@ rm(energy.log)
 power.log$value <- power.log$value*2
 colnames(power.log) <- c("NMI","Demand","TS")
 
-#ts(subset(power.log,select = -c(NMI,TS)),start=c(2015,365),end=c(2015,365))
-
 # Change results into a time series
-power.log.xts <- xts(power.log, order.by = power.log$TS)
-power.log.xts <- subset(power.log,select = -c(NMI,TS))
-
 
 time_index <- seq(from = force_tz(min(power.log$TS),"AEST"),
                   to = force_tz(max(power.log$TS),"AEST"),
                   by = "30 min")
 
-power.log.xts <- xts(power.log$Demand, order.by = time_index)
-
-power.log.ts <- ts(power.log$Demand, frequency=30)
-
+#power.log.ts <- ts(power.log$Demand, frequency=30)
 power.log.ts <- msts(power.log$Demand,seasonal.periods=c(48,336))
 
+# Plot decomposition
+plot(stl(power.log.ts,s.window=48*365))
 plot(decompose(power.log.ts))
-
-#fit <- tbats(power.log.ts)
-#plot(forecast(fit,h=50))
-
-# Set plotting parameters
-par(mfrow=c(1,1)) 
-forecast.periods = 100
-
-# Perform Holt-Winters forecasting
-#power.forecast.hw <- HoltWinters(power.log.ts, beta=FALSE, gamma=FALSE)
-#plot.forecast(forecast.HoltWinters(power.forecast.hw,h=forecast.periods))
-
-# Perform ARIMA (Autoregressive integrated moving average) forecasting
-power.forecast.arima <- auto.arima(power.log.ts,approximation=FALSE,trace=FALSE)
-plot.forecast(forecast.Arima(power.forecast.arima,h=forecast.periods))
-
-# Perform ETS (Exponential smoothing state space) forecasting
-power.forecast.ets <- ets(power.log.ts)
-plot.forecast(forecast.ets(power.forecast.ets,h=forecast.periods))
-
-
-
-
-#NeuralModel = nnet(value~TS, data=power.log,size=10,maxit=1000,decay=0.001)
-#NeuralModel$fitted.values
-#forecast.nnetar(NeuralModel,h=20)
-#NeuralModel$fitted.values
-#fit <- nnetar(power.log.ts,)
-
-
-# Graph demand
-dygraph(power.log.ts) %>% dyRangeSelector()
 
